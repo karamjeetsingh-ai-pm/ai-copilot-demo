@@ -3,6 +3,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Load Streamlit secrets into env if running on cloud
+try:
+    import streamlit as st
+    for key, value in st.secrets.items():
+        os.environ[key] = value
+except Exception:
+    pass
+
 class Config:
     GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY")
     GROQ_API_KEY      = os.getenv("GROQ_API_KEY")
