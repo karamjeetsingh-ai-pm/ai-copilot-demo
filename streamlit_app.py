@@ -3,7 +3,7 @@ import uuid
 from app.ui.chat_view import render_chat
 from app.ui.agent_view import render_agent_dashboard
 from app.ui.decision_view import render_decision_board
-from app.access_gate import is_approved, submit_access_request  # ← NEW
+from app.access_gate import is_approved, submit_access_request
 
 st.set_page_config(
     page_title="Astra AI Copilot",
@@ -33,7 +33,7 @@ if "session_id" not in st.session_state:
 
 session_id = st.session_state.session_id
 
-# ── Access Gate session state ─────────────────────────────────── NEW
+# ── Access Gate session state ─────────────────────────────────────
 if "prompt_count" not in st.session_state:
     st.session_state.prompt_count = 0
 if "user_email" not in st.session_state:
@@ -44,13 +44,11 @@ if "show_gate" not in st.session_state:
     st.session_state.show_gate = False
 if "request_submitted" not in st.session_state:
     st.session_state.request_submitted = False
-
-# Check if returning approved user (on every session start)
-if st.session_state.user_email and not st.session_state.access_granted:
-    st.session_state.access_granted = is_approved(st.session_state.user_email)
+if "email_checked" not in st.session_state:
+    st.session_state.email_checked = False
 # ─────────────────────────────────────────────────────────────────
 
-# Sidebar
+# ── Sidebar ───────────────────────────────────────────────────────
 with st.sidebar:
     view = st.radio(
         "Navigate",
@@ -59,6 +57,38 @@ with st.sidebar:
     )
     st.divider()
 
+    # ── Returning user email check (in sidebar, non-intrusive) ────
+    if not st.session_state.access_granted:
+        st.markdown("**Already have access?**")
+        returning_email = st.text_input(
+            "Enter your email",
+            key="returning_email_input",
+            placeholder="you@company.com",
+            label_visibility="collapsed"
+        )
+        if st.button("Check Access", use_container_width=True):
+            if returning_email.strip():
+                if is_approved(returning_email.strip()):
+                    st.session_state.user_email = returning_email.strip()
+                    st.session_state.access_granted = True
+                    st.session_state.email_checked = True
+                    st.rerun()
+                else:
+                    st.error("Not approved yet.")
+            else:
+                st.error("Enter your email first.")
+        st.divider()
+    else:
+        st.success(f"✅ Access granted")
+        st.caption(f"{st.session_state.user_email}")
+        if st.button("Sign out", use_container_width=True):
+            st.session_state.access_granted = False
+            st.session_state.user_email = None
+            st.session_state.prompt_count = 0
+            st.rerun()
+        st.divider()
+# ─────────────────────────────────────────────────────────────────
+
 # Powered by bar
 st.markdown("""
 <div class="powered-bar">
@@ -66,13 +96,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Access Gate Modal ─────────────────────────────────────────── NEW
+# ── Access Gate Modal ─────────────────────────────────────────────
 if st.session_state.show_gate and not st.session_state.access_granted:
     st.warning("You've used your free prompt. Request access to keep going.")
 
     if st.session_state.request_submitted:
-        st.success("✅ Request submitted! You'll hear back at " + st.session_state.user_email)
-        st.info("Once approved, refresh this page and you'll have full access.")
+        email_display = st.session_state.user_email or "your email"
+        st.success(f"✅ Request submitted! You'll hear back at {email_display}")
+        st.info("Once approved, enter your email in the sidebar to get full access.")
         st.stop()
 
     with st.form("access_request_form"):
@@ -96,7 +127,7 @@ if st.session_state.show_gate and not st.session_state.access_granted:
                 st.session_state.request_submitted = True
                 st.rerun()
 
-    st.stop()  # Don't render the app below the form
+    st.stop()
 # ─────────────────────────────────────────────────────────────────
 
 # Route to selected view
