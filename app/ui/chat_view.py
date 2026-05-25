@@ -94,9 +94,6 @@ def render_chat(session_id: str):
                 st.caption("Ask a question to see live metrics.")
 
     # ── Main area ────────────────────────────────────────────────────────
-                            
-
-    # ── Main area ────────────────────────────────────────────────────────
     st.subheader("🌟 Astra AI Copilot")
     st.caption("Ask anything — Astra reasons, searches, and recommends.")
 
@@ -120,7 +117,6 @@ def render_chat(session_id: str):
         st.session_state.success_count = 0
 
     # Load from Supabase if messages not in session state
-    # This fixes the refresh bug — messages survive page reloads
     if "messages" not in st.session_state or not st.session_state.messages:
         if active_chat_id:
             st.session_state.messages = load_chat_messages(active_chat_id)
@@ -130,8 +126,22 @@ def render_chat(session_id: str):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
+    # ── Approved user badge (subtle, in main area) ───────────────────────
+    if st.session_state.get("access_granted"):
+        st.caption("✅ Full access granted")
+    elif st.session_state.get("prompt_count", 0) == 0:
+        st.caption("💡 You have 1 free prompt. Request access to continue after that.")
+
     # Chat input
     if user_input := st.chat_input("Ask Astra anything..."):
+
+        # ── ACCESS GATE CHECK ────────────────────────────────────────────
+        if not st.session_state.get("access_granted"):
+            st.session_state.prompt_count = st.session_state.get("prompt_count", 0) + 1
+            if st.session_state.prompt_count > 1:
+                st.session_state.show_gate = True
+                st.rerun()  # sends back to streamlit_app.py which renders the gate
+        # ─────────────────────────────────────────────────────────────────
 
         # Auto-title the chat from first message
         chats = load_chats(session_id)
@@ -187,5 +197,4 @@ def render_chat(session_id: str):
         save_message_to_chat(session_id, active_chat_id, "assistant", output)
         st.session_state.messages.append({"role": "assistant", "content": output})
 
-        # Rerun AFTER everything is saved — output reloads from session state
         st.rerun()

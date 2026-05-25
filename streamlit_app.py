@@ -3,6 +3,7 @@ import uuid
 from app.ui.chat_view import render_chat
 from app.ui.agent_view import render_agent_dashboard
 from app.ui.decision_view import render_decision_board
+from app.access_gate import is_approved, submit_access_request  # ← NEW
 
 st.set_page_config(
     page_title="Astra AI Copilot",
@@ -32,6 +33,23 @@ if "session_id" not in st.session_state:
 
 session_id = st.session_state.session_id
 
+# ── Access Gate session state ─────────────────────────────────── NEW
+if "prompt_count" not in st.session_state:
+    st.session_state.prompt_count = 0
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+if "access_granted" not in st.session_state:
+    st.session_state.access_granted = False
+if "show_gate" not in st.session_state:
+    st.session_state.show_gate = False
+if "request_submitted" not in st.session_state:
+    st.session_state.request_submitted = False
+
+# Check if returning approved user (on every session start)
+if st.session_state.user_email and not st.session_state.access_granted:
+    st.session_state.access_granted = is_approved(st.session_state.user_email)
+# ─────────────────────────────────────────────────────────────────
+
 # Sidebar
 with st.sidebar:
     view = st.radio(
@@ -41,12 +59,45 @@ with st.sidebar:
     )
     st.divider()
 
-# Powered by bar — shown at top of main area subtly
+# Powered by bar
 st.markdown("""
 <div class="powered-bar">
 ✦ Gemini 1.5 Flash &nbsp;·&nbsp; Groq Llama 3 &nbsp;·&nbsp; LangChain ReAct &nbsp;·&nbsp; Supabase &nbsp;·&nbsp; Tavily Search
 </div>
 """, unsafe_allow_html=True)
+
+# ── Access Gate Modal ─────────────────────────────────────────── NEW
+if st.session_state.show_gate and not st.session_state.access_granted:
+    st.warning("You've used your free prompt. Request access to keep going.")
+
+    if st.session_state.request_submitted:
+        st.success("✅ Request submitted! You'll hear back at " + st.session_state.user_email)
+        st.info("Once approved, refresh this page and you'll have full access.")
+        st.stop()
+
+    with st.form("access_request_form"):
+        st.markdown("### 🔐 Request Full Access to Astra AI")
+        st.caption("Takes 30 seconds. Karamjeet reviews and approves manually.")
+
+        name     = st.text_input("Name *")
+        email    = st.text_input("Work Email *")
+        company  = st.text_input("Company *")
+        linkedin = st.text_input("LinkedIn URL (optional)")
+        reason   = st.text_area("Why do you need access? (optional)", height=80)
+
+        submitted = st.form_submit_button("Request Access →", use_container_width=True)
+
+        if submitted:
+            if not name.strip() or not email.strip() or not company.strip():
+                st.error("Name, Email and Company are required.")
+            else:
+                submit_access_request(name.strip(), email.strip(), company.strip(), linkedin.strip(), reason.strip())
+                st.session_state.user_email = email.strip()
+                st.session_state.request_submitted = True
+                st.rerun()
+
+    st.stop()  # Don't render the app below the form
+# ─────────────────────────────────────────────────────────────────
 
 # Route to selected view
 if "Copilot Chat" in view:
